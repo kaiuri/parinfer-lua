@@ -13,52 +13,29 @@ local M = {}
 
 -- forward declarations
 local resetParenTrail, rememberParenTrail, updateRememberedParenTrail
-
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Constants
-
 local UINT_NULL = -999
-
 local INDENT_MODE = "INDENT_MODE"
 local PAREN_MODE = "PAREN_MODE"
-
 local BACKSLASH = "\\"
 local BLANK_SPACE = " "
 local DOUBLE_SPACE = "  "
 local DOUBLE_QUOTE = '"'
 local NEWLINE = "\n"
 local TAB = "\t"
-
--- local LINE_ENDING_REGEX = /\r?\n/
-
-local MATCH_PAREN = {}
-MATCH_PAREN["{"] = "}"
-MATCH_PAREN["}"] = "{"
-MATCH_PAREN["["] = "]"
-MATCH_PAREN["]"] = "["
-MATCH_PAREN["("] = ")"
-MATCH_PAREN[")"] = "("
-
--- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
--- Development Helpers
-
--- NOTE: this is useful for development and debugging purposes
--- not required for the core library
--- local inspect = require("libs/inspect")
-
--- toggle this to check the asserts during development
+local MATCH_PAREN = {
+    ["{"] = "}",
+    ["}"] = "{",
+    ["["] = "]",
+    ["]"] = "[",
+    ["("] = ")",
+    [")"] = "(",
+}
 local RUN_ASSERTS = false
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Type Predicates
 
-local function isBoolean(x)
-    return x == true or x == false
-end
 
-local function isTable(t)
-    return type(t) == "table"
-end
 
 local function isInteger(i)
     return type(i) == "number" and i == math.floor(i)
@@ -74,20 +51,11 @@ if RUN_ASSERTS then
 end
 
 local function isPositiveInt(i)
-    return isInteger(i) and i >= 0
-end
-
-local function isString(s)
-    return type(s) == "string"
-end
-
-if RUN_ASSERTS then
-    assert(isString("s"))
-    assert(not isString(true))
+    return type(i) == 'number' and i >= 0
 end
 
 local function isChar(c)
-    return isString(c) and string.len(c) == 1
+    return type(c) == 'string' and string.len(c) == 1
 end
 
 if RUN_ASSERTS then
@@ -97,11 +65,11 @@ if RUN_ASSERTS then
 end
 
 local function isTableOfChars(t)
-    if not isTable(t) then
+    if type(t) ~= 'table' then
         return false
     end
 
-    for _key, ch in pairs(t) do
+    for _, ch in pairs(t) do
         if not isChar(ch) then
             return false
         end
@@ -112,127 +80,27 @@ end
 
 if RUN_ASSERTS then
     assert(isTableOfChars({}))
-    assert(isTableOfChars({"a", "b", "c"}))
-    assert(not isTableOfChars({"a", "b", "ccc"}))
+    assert(isTableOfChars({ "a", "b", "c" }))
+    assert(not isTableOfChars({ "a", "b", "ccc" }))
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Language Helpers
 
-local function isTableEmpty(t)
-    for _key, _val in pairs(t) do
-        return false
-    end
-    return true
-end
-
-if RUN_ASSERTS then
-    assert(isTableEmpty({}))
-    assert(not isTableEmpty({"a", "b"}))
-end
-
-local function tableSize(t)
-    if RUN_ASSERTS then
-        assert(isTable(t), "used tableSize with not an Table")
-    end
-
-    local count = 0
-    for _key, _val in pairs(t) do
-        count = count + 1
-    end
-    return count
-end
-
-if RUN_ASSERTS then
-    assert(tableSize({}) == 0)
-    assert(tableSize({"a", "b"}) == 2)
-    assert(tableSize({"a", "b", "c", "d", "e"}) == 5)
-    assert(tableSize({a = "a", b = "b"}) == 2)
-end
-
-local function strLen(s)
-    if RUN_ASSERTS then
-        assert(isString(s), "used strLen with not a String")
-    end
-    return string.len(s)
-end
-
-local function strConcat(s1, s2)
-    if RUN_ASSERTS then
-        assert(isString(s1), "strConcat argument s1 is not a String")
-        assert(isString(s2), "strConcat argument s2 is not a String")
-    end
-    return s1 .. s2
-end
-
-local function getCharFromString(s, idx)
-    if RUN_ASSERTS then
-        assert(isString(s), "getCharFromString argument s is not a String")
-        assert(isInteger(idx), "getCharFromString argument idx is not an Integer")
-    end
-    return string.sub(s, idx, idx)
-end
-
-if RUN_ASSERTS then
-    assert(getCharFromString("abc", 1) == "a")
-    assert(getCharFromString("abc", 2) == "b")
-end
-
-local function strJoin(tbl, delimiter)
-    if RUN_ASSERTS then
-        assert(isTable(tbl), "strJoin argument tbl is not a Table")
-        assert(isString(delimiter), "strJoin argument delimiter is not a String")
-    end
-
-    return table.concat(tbl, delimiter)
-end
-
-if RUN_ASSERTS then
-    assert(strJoin({"a", "b", "c"}, "") == "abc")
-    assert(strJoin({"a", "b", "c"}, "x") == "axbxc")
-    assert(strJoin({"a", "b", "c"}, "\n") == "a\nb\nc")
-    assert(strJoin({"a", "b", "c", "dd"}, "zz") == "azzbzzczzdd")
-    assert(strJoin({}, "z") == "")
-    assert(strJoin({}, "") == "")
-end
-
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- String Operations
 
 local function replaceWithinString(orig, startIdx, endIdx, replace)
-    local head = string.sub(orig, 1, startIdx - 1)
-    local tail = string.sub(orig, endIdx, -1)
-    return head .. replace .. tail
+    return string.format('%s%s%s', string.sub(orig, 1, startIdx - 1), replace, string.sub(orig, endIdx, -1))
 end
 
-if RUN_ASSERTS then
-    assert(replaceWithinString("abc", 1, 3, "") == "c")
-    assert(replaceWithinString("abc", 1, 2, "x") == "xbc")
-    assert(replaceWithinString("abc", 1, 3, "x") == "xc")
-    assert(replaceWithinString("abcdef", 4, 26, "") == "abc")
-end
 
-local function repeatString(text, n)
-    return string.rep(text, n)
-end
-
-if RUN_ASSERTS then
-    assert(repeatString("a", 2) == "aa")
-    assert(repeatString("aa", 3) == "aaaaaa")
-    assert(repeatString("aa", 0) == "")
-    assert(repeatString("", 0) == "")
-    assert(repeatString("", 5) == "")
-end
-
-local function getLineEnding(text)
-    -- TODO: allow for "\r\n" as well as "\n" here
-    return "\n"
-end
-
--- modified from penlight: https://tinyurl.com/37fqwxy8
+---modified from penlight: https://tinyurl.com/37fqwxy8
+---@param s string
+---@return string[]
 local function splitLines(s)
     if s == "" then
-        return {""}
+        return { "" }
     end
 
     local res = {}
@@ -258,8 +126,8 @@ local function splitLines(s)
         table.insert(res, string.sub(s, pos))
     end
 
-    local len = strLen(s)
-    local lastCh = getCharFromString(s, len)
+    local len = string.len(s)
+    local lastCh = string.sub(s, len, len)
     if lastCh == "\n" then
         table.insert(res, "")
     end
@@ -270,187 +138,70 @@ end
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Stack Operations
 
-local function isStackEmpty(t)
-    if RUN_ASSERTS then
-        assert(isTable(t), "used isStackEmpty with not a Table")
-    end
-
-    for _key, _val in pairs(t) do
-        return false
-    end
-    return true
-end
-
-if RUN_ASSERTS then
-    assert(isStackEmpty({}))
-    assert(not isStackEmpty({"a"}))
-    assert(not isStackEmpty({"a", "b"}))
-end
-
+---@generic T
+---@param arr T[]
+---@param idxFromBack number
+---@return T?
 local function peek(arr, idxFromBack)
-    idxFromBack = idxFromBack + 1
-    local maxIdx = tableSize(arr)
-    if (idxFromBack > maxIdx) then
-        return nil
-    end
-    return arr[maxIdx - idxFromBack + 1]
+    local at = #arr - idxFromBack
+    if at < 0 then return nil end
+    return arr[at] or nil
 end
 
 if RUN_ASSERTS then
-    assert(peek({"a"}, 0) == "a")
-    assert(peek({"a"}, 1) == nil)
-    assert(peek({"a", "b", "c"}, 0) == "c")
-    assert(peek({"a", "b", "c"}, 1) == "b")
-    assert(peek({"a", "b", "c"}, 5) == nil)
+    assert(peek({ "a" }, 0) == "a")
+    assert(peek({ "a" }, 1) == nil)
+    assert(peek({ "a", "b", "c" }, 0) == "c")
+    assert(peek({ "a", "b", "c" }, 1) == "b")
+    assert(peek({ "a", "b", "c" }, 5) == nil)
     assert(peek({}, 0) == nil)
     assert(peek({}, 1) == nil)
-end
-
-local function stackPop(s)
-    if RUN_ASSERTS then
-        assert(isTable(s), "used stackPop with not an Table")
-    end
-
-    return table.remove(s)
-end
-
-if RUN_ASSERTS then
-    assert(stackPop({"a"}) == "a")
-    assert(stackPop({"a", "b", "c"}) == "c")
-    local testTable1 = {"a", "b"}
-    assert(stackPop(testTable1) == "b")
-    assert(tableSize(testTable1) == 1)
-    assert(stackPop(testTable1) == "a")
-    assert(tableSize(testTable1) == 0)
-    stackPop(testTable1)
-    assert(tableSize(testTable1) == 0)
-end
-
-local function stackPush(s, itm)
-    if RUN_ASSERTS then
-        assert(isTable(s), "used stackPush with not an Table")
-        assert(isString(itm) or itm, "used stackPush without a second itm")
-    end
-
-    table.insert(s, itm)
-    return nil
-end
-
-if RUN_ASSERTS then
-    local testTable2 = {"a", "b"}
-    stackPush(testTable2, "c")
-    assert(tableSize(testTable2) == 3)
-    assert(peek(testTable2, 0) == "c")
-    assert(peek(testTable2, 1) == "b")
-end
-
--- returns a new table with elements of tbl
--- startIdx and endIdx are both inclusive
-local function sliceTable(tbl, startIdx, endIdx)
-    local newTable = {}
-
-    for idx, v in pairs(tbl) do
-        if idx >= startIdx and idx <= endIdx then
-            table.insert(newTable, v)
-        end
-    end
-
-    return newTable
-end
-
-if RUN_ASSERTS then
-    assert(strJoin(sliceTable({"a", "b", "c"}, 1, 1), "") == strJoin({"a"}, ""))
-    assert(strJoin(sliceTable({"a", "b", "c"}, 2, 2), "") == strJoin({"b"}, ""))
-    assert(strJoin(sliceTable({"a", "b", "c", "d", "e"}, 2, 3), "") == strJoin({"b", "c"}, ""))
-    assert(strJoin(sliceTable({"a", "b", "c", "d", "e"}, 3, 25), "") == strJoin({"c", "d", "e"}, ""))
-    assert(strJoin(sliceTable({}, 2, 3), "") == strJoin({}, ""))
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Options Structure
 
-local function transformChange(change)
-    if not change then
-        return nil
-    end
-
-    local newLines = splitLines(change.newText)
-    local oldLines = splitLines(change.oldText)
-
-    -- single line case:
-    --     (defn foo| [])
-    --              ^ newEndX, newEndLineNo
-    --           +++
-
-    -- multi line case:
-    --     (defn foo
-    --           ++++
-    --        "docstring."
-    --     ++++++++++++++++
-    --       |[])
-    --     ++^ newEndX, newEndLineNo
-
-    local prevOldLine = peek(oldLines, 0)
-    local lastOldLineLen = strLen(prevOldLine)
-
-    local prevNewLine = peek(newLines, 0)
-    local lastNewLineLen = strLen(prevNewLine)
-
-    local carryOverOldX = 1 -- Lua ONE INDEX
-    if tableSize(oldLines) == 1 then
-        carryOverOldX = change.x
-    end
-    local oldEndX = carryOverOldX + lastOldLineLen
-
-    local carryOverNewX = 1 -- Lua ONE INDEX
-    if tableSize(newLines) == 1 then
-        carryOverNewX = change.x
-    end
-    local newEndX = carryOverNewX + lastNewLineLen
-
-    local newEndLineNo = change.lineNo + tableSize(newLines) - 1
-
-    return {
-        x = change.x,
-        lineNo = change.lineNo,
-        oldText = change.oldText,
-        newText = change.newText,
-        oldEndX = oldEndX,
-        newEndX = newEndX,
-        newEndLineNo = newEndLineNo,
-        lookupLineNo = newEndLineNo,
-        lookupX = newEndX
-    }
-end
 
 local function transformChanges(changes)
-    if tableSize(changes) == 0 then
+    if #changes == 0 then
         return nil
-    else
-        local lines = {}
-        local changesLen = tableSize(changes)
-        local i = 1 -- Lua ONE INDEX
-        while i <= changesLen do
-            local change = transformChange(changes[i])
-            local line = lines[change.lookupLineNo]
-            if not line then
-                line = {}
-                lines[change.lookupLineNo] = line
-            end
-            line[change.lookupX] = change
-
-            i = i + 1
-        end
-        return lines
     end
+    local transformed_changes = {}
+    for _, change in ipairs(changes) do
+        local newLines = splitLines(change.newText)
+        local oldLines = splitLines(change.oldText)
+        local old_line_count = #oldLines
+        local new_line_count = #newLines
+        local lastOldLineLen = string.len(oldLines[old_line_count])
+        local lastNewLineLen = string.len(newLines[new_line_count])
+        local carryOverOldX = (old_line_count == 1) and change.x or 1
+        local oldEndX = carryOverOldX + lastOldLineLen
+        local carryOverNewX = (new_line_count == 1) and change.x or 1
+        local newEndX = carryOverNewX + lastNewLineLen
+        local newEndLineNo = change.lineNo + new_line_count - 1
+        local line = transformed_changes[newEndLineNo]
+        if not line then
+            line = {}
+            transformed_changes[newEndLineNo] = line
+        end
+        line[newEndX] = {
+            x = change.x,
+            lineNo = change.lineNo,
+            oldText = change.oldText,
+            newText = change.newText,
+            oldEndX = oldEndX,
+            newEndX = newEndX,
+            newEndLineNo = newEndLineNo,
+            lookupLineNo = newEndLineNo,
+            lookupX = newEndX
+        }
+    end
+    return transformed_changes
 end
 
 local function parseOptions(options)
-    if (not isTable(options)) then
-        options = {}
-    end
-
-    return {
+    options = options or {}
+    local result = {
         changes = options.changes,
         commentChars = options.commentChars,
         cursorLine = options.cursorLine,
@@ -462,6 +213,7 @@ local function parseOptions(options)
         returnParens = options.returnParens,
         selectionStartLine = options.selectionStartLine
     }
+    return result
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -489,12 +241,12 @@ local function getInitialResult(text, options, mode, smart)
         origCursorX = UINT_NULL,
         origCursorLine = UINT_NULL,
         inputLines = splitLines(text),
-        inputLineNo = 0, -- Lua ONE INDEX
-        inputX = 0, -- Lua ONE INDEX
+        inputLineNo = 0,
+        inputX = 0,
         lines = {},
-        lineNo = 0, -- Lua ONE INDEX
+        lineNo = 0,
         ch = "",
-        x = 0, -- Lua ONE INDEX
+        x = 0,
         indentX = UINT_NULL,
         parenStack = {},
         tabStops = {},
@@ -506,7 +258,7 @@ local function getInitialResult(text, options, mode, smart)
         cursorLine = UINT_NULL,
         prevCursorX = UINT_NULL,
         prevCursorLine = UINT_NULL,
-        commentChars = {";"},
+        commentChars = { ";" },
         selectionStartLine = UINT_NULL,
         changes = nil,
         isInCode = true,
@@ -524,86 +276,76 @@ local function getInitialResult(text, options, mode, smart)
         maxIndent = UINT_NULL,
         indentDelta = 0,
         trackingArgTabStop = nil,
-        ["error"] = {
-            name = nil,
-            message = nil,
-            lineNo = nil,
-            x = nil,
-            extra = {
-                name = nil,
-                lineNo = nil,
-                x = nil
-            }
-        },
+        ["error"] = { name = nil, message = nil, lineNo = nil, x = nil, extra = { name = nil, lineNo = nil, x = nil } },
         errorPosCache = {}
     }
 
-    -- merge user options if they are valid
-    if (options) then
-        if isInteger(options.cursorX) then
-            result.cursorX = options.cursorX
-            result.origCursorX = options.cursorX
-        end
+    if (options.cursorX) then
+        result.cursorX = options.cursorX
+        result.origCursorX = options.cursorX
+    end
 
-        if isInteger(options.cursorLine) then
-            result.cursorLine = options.cursorLine
-            result.origCursorLine = options.cursorLine
-        end
+    if (options.cursorLine) then
+        result.cursorLine = options.cursorLine
+        result.origCursorLine = options.cursorLine
+    end
 
-        if isInteger(options.prevCursorX) then
-            result.prevCursorX = options.prevCursorX
-        end
-        if isInteger(options.prevCursorLine) then
-            result.prevCursorLine = options.prevCursorLine
-        end
-        if isInteger(options.selectionStartLine) then
-            result.selectionStartLine = options.selectionStartLine
-        end
-        if isTable(options.changes) then
-            result.changes = transformChanges(options.changes)
-        end
-        if isBoolean(options.partialResult) then
-            result.partialResult = options.partialResult
-        end
-        if isBoolean(options.forceBalance) then
-            result.forceBalance = options.forceBalance
-        end
-        if isBoolean(options.returnParens) then
-            result.returnParens = options.returnParens
-        end
-        if isChar(options.commentChars) then
-            result.commentChars = {options.commentChars}
-        end
-        if isTableOfChars(options.commentChars) then
-            result.commentChars = options.commentChars
-        end
+    if (options.prevCursorX) then
+        result.prevCursorX = options.prevCursorX
+    end
+    if (options.prevCursorLine) then
+        result.prevCursorLine = options.prevCursorLine
+    end
+    if (options.selectionStartLine) then
+        result.selectionStartLine = options.selectionStartLine
+    end
+    if type(options.changes) == 'table' then
+        result.changes = transformChanges(options.changes)
+    end
+    if type(options.partialResult) == 'boolean' then
+        result.partialResult = options.partialResult
+    end
+    if type(options.forceBalance) == "boolean" then
+        result.forceBalance = options.forceBalance
+    end
+    if type(options.returnParens) == "boolean" then
+        result.returnParens = options.returnParens
+    end
+    if isChar(options.commentChars) then
+        result.commentChars = { options.commentChars }
+    end
+    if isTableOfChars(options.commentChars) then
+        result.commentChars = options.commentChars
     end
 
     return result
 end
 
+
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Possible Errors
-
 -- `result.error.name` is set to any of these
-local ERROR_QUOTE_DANGER = "quote-danger"
-local ERROR_EOL_BACKSLASH = "eol-backslash"
-local ERROR_UNCLOSED_QUOTE = "unclosed-quote"
-local ERROR_UNCLOSED_PAREN = "unclosed-paren"
-local ERROR_UNMATCHED_CLOSE_PAREN = "unmatched-close-paren"
-local ERROR_UNMATCHED_OPEN_PAREN = "unmatched-open-paren"
-local ERROR_LEADING_CLOSE_PAREN = "leading-close-paren"
-local ERROR_UNHANDLED = "unhandled"
+local ERROR = {
+    QUOTE_DANGER = "quote-danger",
+    EOL_BACKSLASH = "eol-backslash",
+    UNCLOSED_QUOTE = "unclosed-quote",
+    UNCLOSED_PAREN = "unclosed-paren",
+    UNMATCHED_CLOSE_PAREN = "unmatched-close-paren",
+    UNMATCHED_OPEN_PAREN = "unmatched-open-paren",
+    LEADING_CLOSE_PAREN = "leading-close-paren",
+    UNHANDLED = "unhandled",
+}
 
-local errorMessages = {}
-errorMessages[ERROR_QUOTE_DANGER] = "Quotes must balanced inside comment blocks."
-errorMessages[ERROR_EOL_BACKSLASH] = "Line cannot end in a hanging backslash."
-errorMessages[ERROR_UNCLOSED_QUOTE] = "String is missing a closing quote."
-errorMessages[ERROR_UNCLOSED_PAREN] = "Unclosed open-paren."
-errorMessages[ERROR_UNMATCHED_CLOSE_PAREN] = "Unmatched close-paren."
-errorMessages[ERROR_UNMATCHED_OPEN_PAREN] = "Unmatched open-paren."
-errorMessages[ERROR_LEADING_CLOSE_PAREN] = "Line cannot lead with a close-paren."
-errorMessages[ERROR_UNHANDLED] = "Unhandled error."
+local errorMessages = {
+    [ERROR.QUOTE_DANGER] = "Quotes must balanced inside comment blocks.",
+    [ERROR.EOL_BACKSLASH] = "Line cannot end in a hanging backslash.",
+    [ERROR.UNCLOSED_QUOTE] = "String is missing a closing quote.",
+    [ERROR.UNCLOSED_PAREN] = "Unclosed open-paren.",
+    [ERROR.UNMATCHED_CLOSE_PAREN] = "Unmatched close-paren.",
+    [ERROR.UNMATCHED_OPEN_PAREN] = "Unmatched open-paren.",
+    [ERROR.LEADING_CLOSE_PAREN] = "Line cannot lead with a close-paren.",
+    [ERROR.UNHANDLED] = "Unhandled error.",
+}
 
 local function cacheErrorPos(result, errorName)
     local e = {
@@ -645,9 +387,9 @@ local function createError(result, name)
     }
     local opener = peek(result.parenStack, 0)
 
-    if name == ERROR_UNMATCHED_CLOSE_PAREN then
+    if name == ERROR.UNMATCHED_CLOSE_PAREN then
         -- extra error info for locating the open-paren that it should've matched
-        local cache2 = result.errorPosCache[ERROR_UNMATCHED_OPEN_PAREN]
+        local cache2 = result.errorPosCache[ERROR.UNMATCHED_OPEN_PAREN]
         if cache2 or opener then
             local lineNo2 = 0
             local x2 = 0
@@ -660,12 +402,12 @@ local function createError(result, name)
             end
 
             err.extra = {
-                name = ERROR_UNMATCHED_OPEN_PAREN,
+                name = ERROR.UNMATCHED_OPEN_PAREN,
                 lineNo = lineNo2,
                 x = x2
             }
         end
-    elseif name == ERROR_UNCLOSED_PAREN then
+    elseif name == ERROR.UNCLOSED_PAREN then
         err.lineNo = opener[keyLineNo]
         err.x = opener[keyX]
     end
@@ -676,22 +418,23 @@ end
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Line Operations
 
-local function isCursorAffected(result, startIdx, endIdx)
+local isCursorAffected = (function(result, startIdx, endIdx)
     if (result.cursorX == startIdx and result.cursorX == endIdx) then
-        return result.cursorX == 1 -- Lua ONE INDEX
+        return result.cursorX == 1
     end
+
     return result.cursorX >= endIdx
-end
+end)
 
 local function shiftCursorOnEdit(result, lineNo, startIdx, endIdx, replaceTxt)
     local oldLength = endIdx - startIdx
-    local newLength = strLen(replaceTxt)
+    local newLength = string.len(replaceTxt)
     local dx = newLength - oldLength
 
     if
         (dx ~= 0 and result.cursorLine == lineNo and result.cursorX ~= UINT_NULL and
             isCursorAffected(result, startIdx, endIdx))
-     then
+    then
         result.cursorX = result.cursorX + dx
     end
 end
@@ -710,16 +453,16 @@ local function insertWithinLine(result, lineNo, idx, insert)
 end
 
 local function initLine(result)
-    result.x = 1 -- Lua ONE INDEX
+    result.x = 1
     result.lineNo = result.lineNo + 1
 
     -- reset line-specific state
     result.indentX = UINT_NULL
     result.commentX = UINT_NULL
     result.indentDelta = 0
-    result.errorPosCache[ERROR_UNMATCHED_CLOSE_PAREN] = nil
-    result.errorPosCache[ERROR_UNMATCHED_OPEN_PAREN] = nil
-    result.errorPosCache[ERROR_LEADING_CLOSE_PAREN] = nil
+    result.errorPosCache[ERROR.UNMATCHED_CLOSE_PAREN] = nil
+    result.errorPosCache[ERROR.UNMATCHED_OPEN_PAREN] = nil
+    result.errorPosCache[ERROR.LEADING_CLOSE_PAREN] = nil
 
     result.trackingArgTabStop = nil
     result.trackingIndent = not result.isInStr
@@ -728,8 +471,8 @@ end
 -- if the current character has changed, commit its change to the current line.
 local function commitChar(result, origCh)
     local ch = result.ch
-    local origChLength = strLen(origCh)
-    local chLength = strLen(ch)
+    local origChLength = string.len(origCh)
+    local chLength = string.len(ch)
 
     if origCh ~= ch then
         replaceWithinLine(result, result.lineNo, result.x, result.x + origChLength, ch)
@@ -764,25 +507,9 @@ end
 
 -- concat the elements in t2 onto t1
 -- returns a new table
-local function concatTables(t1, t2)
-    local newTable = {}
-
-    for k, v in pairs(t1) do
-        table.insert(newTable, v)
-    end
-
-    for k, v in pairs(t2) do
-        table.insert(newTable, v)
-    end
-
-    return newTable
-end
-
-if RUN_ASSERTS then
-    assert(strJoin(concatTables({}, {}), "") == strJoin({}, ""))
-    assert(strJoin(concatTables({"a"}, {}), "") == strJoin({"a"}, ""))
-    assert(strJoin(concatTables({}, {"a"}), "") == strJoin({"a"}, ""))
-    assert(strJoin(concatTables({"a", "b", "c"}, {"d", "e"}), "") == strJoin({"a", "b", "c", "d", "e"}, ""))
+local concatTables = function(A, B)
+    local newTable = table.move(A, 1, #A, 1, {})
+    return table.move(B, 1, #B, #newTable + 1, newTable)
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -804,12 +531,8 @@ if RUN_ASSERTS then
 end
 
 local function isValidCloseParen(parenStack, ch)
-    if isStackEmpty(parenStack) then
-        return false
-    end
-
-    local lastOnStack = peek(parenStack, 0)
-    return lastOnStack.ch == MATCH_PAREN[ch]
+    local lastOnStack = parenStack[#parenStack]
+    return lastOnStack and lastOnStack.ch == MATCH_PAREN[ch]
 end
 
 local function isWhitespace(result)
@@ -825,21 +548,19 @@ local function isClosable(result)
 end
 
 local function isCommentChar(ch, commentChars)
-    for _key, commentCh in pairs(commentChars) do
-        if ch == commentCh then
-            return true
-        end
+    for i = 1, #commentChars do
+        if ch == commentChars[i] then return true end
     end
     return false
 end
 
 if RUN_ASSERTS then
-    assert(isCommentChar(";", {";"}))
-    assert(isCommentChar(";", {";", "#"}))
-    assert(isCommentChar("#", {";", "#"}))
-    assert(not isCommentChar("x", {";"}))
-    assert(not isCommentChar("", {";"}))
-    assert(not isCommentChar("#", {";", "a"}))
+    assert(isCommentChar(";", { ";" }))
+    assert(isCommentChar(";", { ";", "#" }))
+    assert(isCommentChar("#", { ";", "#" }))
+    assert(not isCommentChar("x", { ";" }))
+    assert(not isCommentChar("", { ";" }))
+    assert(not isCommentChar("#", { ";", "a" }))
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -848,7 +569,7 @@ end
 local function checkCursorHolding(result)
     local opener = peek(result.parenStack, 0)
     local parent = peek(result.parenStack, 1)
-    local holdMinX = 1 -- Lua ONE INDEX
+    local holdMinX = 1
     if parent then
         holdMinX = parent.x + 1
     end
@@ -860,7 +581,7 @@ local function checkCursorHolding(result)
         local prevHolding =
             result.prevCursorLine == opener.lineNo and holdMinX <= result.prevCursorX and result.prevCursorX <= holdMaxX
         if prevHolding and not holding then
-            error({releaseCursorHold = true})
+            error({ releaseCursorHold = true })
         end
     end
 
@@ -910,10 +631,10 @@ local function onOpenParen(result)
                 parent2 = parent1.children
             end
 
-            stackPush(parent2, opener)
+            table.insert(parent2, opener)
         end
 
-        stackPush(result.parenStack, opener)
+        table.insert(result.parenStack, opener)
         result.trackingArgTabStop = "space"
     end
 end
@@ -931,7 +652,7 @@ local function onMatchedCloseParen(result)
     end
 
     result.parenTrail.endX = result.x + 1
-    stackPush(result.parenTrail.openers, opener)
+    table.insert(result.parenTrail.openers, opener)
 
     if (result.mode == INDENT_MODE and result.smart and checkCursorHolding(result)) then
         local origStartX = result.parenTrail.startX
@@ -942,7 +663,7 @@ local function onMatchedCloseParen(result)
         result.parenTrail.clamped.endX = origEndX
         result.parenTrail.clamped.openers = origOpeners
     end
-    stackPop(result.parenStack)
+    table.remove(result.parenStack)
     result.trackingArgTabStop = nil
 end
 
@@ -952,13 +673,13 @@ local function onUnmatchedCloseParen(result)
         local inLeadingParenTrail = (trail.lineNo == result.lineNo) and (trail.startX == result.indentX)
         local canRemove = result.smart and inLeadingParenTrail
         if not canRemove then
-            error(createError(result, ERROR_UNMATCHED_CLOSE_PAREN))
+            error(createError(result, ERROR.UNMATCHED_CLOSE_PAREN))
         end
-    elseif (result.mode == INDENT_MODE and not result.errorPosCache[ERROR_UNMATCHED_CLOSE_PAREN]) then
-        cacheErrorPos(result, ERROR_UNMATCHED_CLOSE_PAREN)
+    elseif (result.mode == INDENT_MODE and not result.errorPosCache[ERROR.UNMATCHED_CLOSE_PAREN]) then
+        cacheErrorPos(result, ERROR.UNMATCHED_CLOSE_PAREN)
         local opener = peek(result.parenStack, 0)
         if opener then
-            local e = cacheErrorPos(result, ERROR_UNMATCHED_OPEN_PAREN)
+            local e = cacheErrorPos(result, ERROR.UNMATCHED_OPEN_PAREN)
             e.inputLineNo = opener.inputLineNo
             e.inputX = opener.inputX
         end
@@ -1001,11 +722,11 @@ local function onQuote(result)
     elseif result.isInComment then
         result.quoteDanger = not result.quoteDanger
         if result.quoteDanger then
-            cacheErrorPos(result, ERROR_QUOTE_DANGER)
+            cacheErrorPos(result, ERROR.QUOTE_DANGER)
         end
     else
         result.isInStr = true
-        cacheErrorPos(result, ERROR_UNCLOSED_QUOTE)
+        cacheErrorPos(result, ERROR.UNCLOSED_QUOTE)
     end
 end
 
@@ -1019,7 +740,7 @@ local function afterBackslash(result)
 
     if result.ch == NEWLINE then
         if result.isInCode then
-            error(createError(result, ERROR_EOL_BACKSLASH))
+            error(createError(result, ERROR.EOL_BACKSLASH))
         end
         onNewline(result)
     end
@@ -1055,7 +776,7 @@ local function onChar(result)
     result.isInCode = (not result.isInComment) and (not result.isInStr)
 
     if isClosable(result) then
-        resetParenTrail(result, result.lineNo, result.x + strLen(ch))
+        resetParenTrail(result, result.lineNo, result.x + string.len(ch))
     end
 
     local state = result.trackingArgTabStop
@@ -1123,8 +844,8 @@ local function clampParenTrailToCursor(result)
         local removeCount = 0
 
         local i = startX
-        while i <= newStartX do -- Lua ONE INDEX
-            local ch = getCharFromString(line, i)
+        while i <= newStartX do
+            local ch = string.sub(line, i, i)
             if isCloseParen(ch) then
                 removeCount = removeCount + 1
             end
@@ -1133,12 +854,12 @@ local function clampParenTrailToCursor(result)
 
         local openers = result.parenTrail.openers
 
-        local openersLen = tableSize(openers)
-        result.parenTrail.openers = sliceTable(openers, removeCount, openersLen)
+        local openersLen = #(openers)
+        result.parenTrail.openers = table.move(openers, removeCount, openersLen, 1, {})
         result.parenTrail.startX = newStartX
         result.parenTrail.endX = newEndX
 
-        result.parenTrail.clamped.openers = sliceTable(openers, 1, removeCount) -- Lua ONE INDEX
+        result.parenTrail.clamped.openers = table.move(openers, 1, removeCount, 1, {})
         result.parenTrail.clamped.startX = startX
         result.parenTrail.clamped.endX = endX
     end
@@ -1152,15 +873,15 @@ local function popParenTrail(result)
         return
     else
         local openers = result.parenTrail.openers
-        while not isStackEmpty(openers) do
-            local itm = stackPop(openers)
-            stackPush(result.parenStack, itm)
+        while not (next(openers) == nil) do
+            local itm = table.remove(openers)
+            table.insert(result.parenStack, itm)
         end
     end
 end
 
 local function getParentOpenerIndex(result, indentX)
-    local parenStackLength = tableSize(result.parenStack)
+    local parenStackLength = #(result.parenStack)
     local i = 0
     while i < parenStackLength do
         local opener = peek(result.parenStack, i)
@@ -1223,10 +944,10 @@ local function correctParenTrail(result, indentX)
     local parens = ""
     local i = 0
     while i < openerIdx do
-        local opener = stackPop(result.parenStack)
-        stackPush(result.parenTrail.openers, opener)
+        local opener = table.remove(result.parenStack)
+        table.insert(result.parenTrail.openers, opener)
         local closeCh = MATCH_PAREN[opener.ch]
-        parens = strConcat(parens, closeCh)
+        parens = parens .. closeCh
 
         if result.returnParens then
             setCloser(opener, result.parenTrail.lineNo, result.parenTrail.startX + i, closeCh)
@@ -1237,7 +958,7 @@ local function correctParenTrail(result, indentX)
 
     if result.parenTrail.lineNo ~= UINT_NULL then
         replaceWithinLine(result, result.parenTrail.lineNo, result.parenTrail.startX, result.parenTrail.endX, parens)
-        result.parenTrail.endX = result.parenTrail.startX + strLen(parens)
+        result.parenTrail.endX = result.parenTrail.startX + string.len(parens)
         rememberParenTrail(result)
     end
 end
@@ -1256,9 +977,9 @@ local function cleanParenTrail(result)
     local spaceCount = 0
     local i = startX
     while i < endX do
-        local lineCh = getCharFromString(line, i)
+        local lineCh = string.sub(line, i, i)
         if (isCloseParen(lineCh)) then
-            newTrail = strConcat(newTrail, lineCh)
+            newTrail = newTrail .. lineCh
         else
             spaceCount = spaceCount + 1
         end
@@ -1284,7 +1005,7 @@ local function setMaxIndent(result, opener)
 end
 
 local function appendParenTrail(result)
-    local opener = stackPop(result.parenStack)
+    local opener = table.remove(result.parenStack)
     local closeCh = MATCH_PAREN[opener.ch]
     if (result.returnParens) then
         setCloser(opener, result.parenTrail.lineNo, result.parenTrail.endX, closeCh)
@@ -1294,7 +1015,7 @@ local function appendParenTrail(result)
     insertWithinLine(result, result.parenTrail.lineNo, result.parenTrail.endX, closeCh)
 
     result.parenTrail.endX = result.parenTrail.endX + 1
-    stackPush(result.parenTrail.openers, opener)
+    table.insert(result.parenTrail.openers, opener)
     updateRememberedParenTrail(result)
 end
 
@@ -1303,18 +1024,20 @@ local function invalidateParenTrail(result)
 end
 
 local function checkUnmatchedOutsideParenTrail(result)
-    local cache = result.errorPosCache[ERROR_UNMATCHED_CLOSE_PAREN]
+    local cache = result.errorPosCache[ERROR.UNMATCHED_CLOSE_PAREN]
     if (cache and cache.x < result.parenTrail.startX) then
-        error(createError(result, ERROR_UNMATCHED_CLOSE_PAREN))
+        error(createError(result, ERROR.UNMATCHED_CLOSE_PAREN))
     end
 end
 
 rememberParenTrail = function(result)
     local trail = result.parenTrail
-    local openers = concatTables(trail.clamped.openers, trail.openers)
-    if not isTableEmpty(openers) then
+    local openers = {}
+    table.move(trail.clamped.openers, 1, #trail.clamped.openers, 1, openers)
+    table.move(trail.openers, 1, #trail.openers, #openers + 1, openers)
+    if not (next(openers) == nil) then
         local isClamped = trail.clamped.startX ~= UINT_NULL
-        local allClamped = isTableEmpty(trail.openers)
+        local allClamped = (next(trail.openers) == nil)
 
         local startX = trail.startX
         if isClamped then
@@ -1331,17 +1054,7 @@ rememberParenTrail = function(result)
             startX = startX,
             endX = endX
         }
-        stackPush(result.parenTrails, shortTrail)
-
-    -- TODO: this almost certainly is not working due to openers
-    -- being a deep copy here and then not being returned anywhere
-    -- possibly a bug in parinfer.js as well
-    --if result.returnParens then
-    --  local i
-    --  for (i = 0; i < openers.length; i++) {
-    --    openers[i].closer.trail = shortTrail
-    --  }
-    --end
+        table.insert(result.parenTrails, shortTrail)
     end
 end
 
@@ -1382,8 +1095,8 @@ end
 local function addIndent(result, delta)
     local origIndent = result.x
     local newIndent = origIndent + delta
-    local indentStr = repeatString(BLANK_SPACE, newIndent - 1) -- Lua ONE INDEX
-    replaceWithinLine(result, result.lineNo, 1, origIndent, indentStr) -- Lua ONE INDEX
+    local indentStr = string.rep(BLANK_SPACE, newIndent - 1)
+    replaceWithinLine(result, result.lineNo, 1, origIndent, indentStr)
     result.x = newIndent
     result.indentX = newIndent
     result.indentDelta = result.indentDelta + delta
@@ -1422,7 +1135,7 @@ local function onIndent(result)
     result.trackingIndent = false
 
     if (result.quoteDanger) then
-        error(createError(result, ERROR_QUOTE_DANGER))
+        error(createError(result, ERROR.QUOTE_DANGER))
     end
 
     if result.mode == INDENT_MODE then
@@ -1438,8 +1151,8 @@ local function onIndent(result)
 end
 
 local function checkLeadingCloseParen(result)
-    if result.errorPosCache[ERROR_LEADING_CLOSE_PAREN] and result.parenTrail.lineNo == result.lineNo then
-        error(createError(result, ERROR_LEADING_CLOSE_PAREN))
+    if result.errorPosCache[ERROR.LEADING_CLOSE_PAREN] and result.parenTrail.lineNo == result.lineNo then
+        error(createError(result, ERROR.LEADING_CLOSE_PAREN))
     end
 end
 
@@ -1447,10 +1160,10 @@ local function onLeadingCloseParen(result)
     if result.mode == INDENT_MODE then
         if not result.forceBalance then
             if result.smart then
-                error({leadingCloseParen = true})
+                error({ leadingCloseParen = true })
             end
-            if not result.errorPosCache[ERROR_LEADING_CLOSE_PAREN] then
-                cacheErrorPos(result, ERROR_LEADING_CLOSE_PAREN)
+            if not result.errorPosCache[ERROR.LEADING_CLOSE_PAREN] then
+                cacheErrorPos(result, ERROR.LEADING_CLOSE_PAREN)
             end
         end
         result.skipChar = true
@@ -1461,7 +1174,7 @@ local function onLeadingCloseParen(result)
             if result.smart then
                 result.skipChar = true
             else
-                error(createError(result, ERROR_UNMATCHED_CLOSE_PAREN))
+                error(createError(result, ERROR.UNMATCHED_CLOSE_PAREN))
             end
         elseif isCursorLeftOf(result.cursorX, result.cursorLine, result.x, result.lineNo) then
             resetParenTrail(result, result.lineNo, result.x)
@@ -1474,14 +1187,14 @@ local function onLeadingCloseParen(result)
 end
 
 local function onCommentLine(result)
-    local parenTrailLen = tableSize(result.parenTrail.openers)
+    local parenTrailLen = #(result.parenTrail.openers)
 
     -- restore the openers matching the previous paren trail
     if result.mode == PAREN_MODE then
         local i = 0
         while i < parenTrailLen do
             local opener = peek(result.parenTrail.openers, i)
-            stackPush(result.parenStack, opener)
+            table.insert(result.parenStack, opener)
             i = i + 1
         end
     end
@@ -1493,14 +1206,14 @@ local function onCommentLine(result)
         if shouldAddOpenerIndent(result, opener) then
             addIndent(result, opener.indentDelta)
         end
-    -- TODO: store some information here if we need to place close-parens after comment lines
+        -- TODO: store some information here if we need to place close-parens after comment lines
     end
 
     -- repop the openers matching the previous paren trail
     if result.mode == PAREN_MODE then
         local i2 = 0
         while i2 < parenTrailLen do
-            stackPop(result.parenStack)
+            table.remove(result.parenStack)
             i2 = i2 + 1
         end
     end
@@ -1542,28 +1255,28 @@ local function setTabStops(result)
         return
     end
 
-    local parenStackLen = tableSize(result.parenStack)
+    local parenStackLen = #(result.parenStack)
     local i = 1
-    while (i <= parenStackLen) do -- Lua ONE INDEX
+    while (i <= parenStackLen) do
         local ts = makeTabStop(result, result.parenStack[i])
-        stackPush(result.tabStops, ts)
+        table.insert(result.tabStops, ts)
         i = i + 1
     end
 
     if result.mode == PAREN_MODE then
-        local parenTrailOpenersLen = tableSize(result.parenTrail.openers)
-        local i2 = parenTrailOpenersLen -- Lua ONE INDEX
+        local parenTrailOpenersLen = #(result.parenTrail.openers)
+        local i2 = parenTrailOpenersLen
         while (i2 > 0) do
             local ts2 = makeTabStop(result, result.parenTrail.openers[i2])
-            stackPush(result.tabStops, ts2)
+            table.insert(result.tabStops, ts2)
             i2 = i2 - 1
         end
     end
 
     -- remove argX if it falls to the right of the next stop
-    local tabStopsLen = tableSize(result.tabStops)
+    local tabStopsLen = #(result.tabStops)
     local i3 = 1
-    while i3 <= tabStopsLen do -- Lua ONE INDEX
+    while i3 <= tabStopsLen do
         local currentX = result.tabStops[i3].x
         local prevTabStop = result.tabStops[i3 - 1]
         if prevTabStop then
@@ -1603,16 +1316,16 @@ local function processLine(result, lineNo)
     initLine(result)
 
     local line = result.inputLines[lineNo]
-    stackPush(result.lines, line)
+    table.insert(result.lines, line)
 
     setTabStops(result)
 
-    local lineLength = strLen(line)
-    local x = 1 -- Lua ONE INDEX
+    local lineLength = string.len(line)
+    local x = 1
     while x <= lineLength do
         result.inputX = x
         local line2 = result.inputLines[lineNo]
-        local ch = getCharFromString(line2, x)
+        local ch = string.sub(line2, x, x)
         processChar(result, ch)
 
         x = x + 1
@@ -1631,15 +1344,15 @@ end
 
 local function finalizeResult(result)
     if result.quoteDanger then
-        error(createError(result, ERROR_QUOTE_DANGER))
+        error(createError(result, ERROR.QUOTE_DANGER))
     end
     if result.isInStr then
-        error(createError(result, ERROR_UNCLOSED_QUOTE))
+        error(createError(result, ERROR.UNCLOSED_QUOTE))
     end
 
-    if not isStackEmpty(result.parenStack) then
+    if not (next(result.parenStack) == nil) then
         if (result.mode == PAREN_MODE) then
-            error(createError(result, ERROR_UNCLOSED_PAREN))
+            error(createError(result, ERROR.UNCLOSED_PAREN))
         end
     end
     if result.mode == INDENT_MODE then
@@ -1656,7 +1369,7 @@ local function processError(result, err)
         err.parinferError = nil
         result.error = err
     else
-        result.error.name = ERROR_UNHANDLED
+        result.error.name = ERROR.UNHANDLED
         result.error.message = err.stack
         error(err)
     end
@@ -1670,43 +1383,26 @@ local function processTextInternal(result)
     finalizeResult(result)
 end
 
-local doThePcall = true
-
 local function processText(text, options, mode, smart)
     local result = getInitialResult(text, options, mode, smart)
-
-    if doThePcall then
-        local status, err =
-            pcall(
-            function()
-                return processTextInternal(result)
-            end
-        )
-
-        if status then
-            return result
-        else
-            if err.leadingCloseParen or err.releaseCursorHold then
-                return processText(text, options, PAREN_MODE, smart)
-            end
-
-            processError(result, err)
-            return result
+    local status, err = pcall(processTextInternal, result)
+    if err then
+        if err.leadingCloseParen or err.releaseCursorHold then
+            return processText(text, options, PAREN_MODE, smart)
         end
-    else
-        processTextInternal(result)
-        return result
+        processError(result, err)
     end
+    return result
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 -- Public API
 
 local function publicResult(result)
-    local lineEnding = getLineEnding(result.origText)
+    local lineEnding = '\n'
     local final = {}
     if result.success then
-        final.text = strJoin(result.lines, lineEnding)
+        final.text = table.concat(result.lines, lineEnding)
         final.cursorX = result.cursorX
         final.cursorLine = result.cursorLine
         final.success = true
@@ -1720,7 +1416,7 @@ local function publicResult(result)
         final["error"] = result["error"]
 
         if result.partialResult then
-            final.text = strJoin(result.lines, lineEnding)
+            final.text = table.concat(result.lines, lineEnding)
             final.cursorX = result.cursorX
             final.cursorLine = result.cursorLine
             final.parenTrails = result.parenTrails
@@ -1742,7 +1438,7 @@ local function publicResult(result)
     if final.cursorLine == UINT_NULL then
         final.cursorLine = nil
     end
-    if final.tabStops and isTableEmpty(final.tabStops) then
+    if final.tabStops and (next(final.tabStops) == nil) then
         final.tabStops = nil
     end
 
